@@ -1,0 +1,18 @@
+Package: stablr
+Type: Package
+Title: Stability Analysis Tools for the Careful Researcher
+Version: 0.0.5
+Author: Biyonka Liang, Arun Ramamurthy
+Maintainer: Arun Ramamurthy <contact@arun.run>
+Description: More about what it does (maybe more than one line)
+    Use four spaces when indenting paragraphs within the Description.
+License: What license is it under?
+Encoding: UTF-8
+LazyData: true
+Imports: 
+    purrr,
+    magrittr
+Suggests: 
+    knitr,
+    rmarkdown
+VignetteBuilder: knitr
