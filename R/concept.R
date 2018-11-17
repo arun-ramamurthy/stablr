@@ -1,24 +1,44 @@
 ###################
 #### STABILITY ####
-ES <- function(.data, V = 100, formula = y ~ ., perturb_fn = perturb) { ## perturb can be user-defined specially
-  get_yhat_singleton <- function() {
+ES.lm <- function(.data, formula, V = 100, perturb_fn = perturb) { ## perturb can be user-defined specially
+  simulate_single_yhat <- function() {
     .data %>%
       perturb_fn() %>%
       lm(formula = formula) %>%
       predict()
   }
 
-  V_yhats <- V %>% rerun(get_yhat_singleton())
-  m <- V_yhats %>% {do.call(cbind, .)} %>% rowMeans()
-  V_yhats %>%
-    map_dbl(~ norm(. - m, type = "2")) %>%
+  V_yhats <- purrr::rerun(V, simulate_single_yhat())
+  mean_yhat <- purrr::invoke(cbind, V_yhats) %>% rowMeans()
+  T_hat <-
+    V_yhats %>%
+    purrr::map_dbl(~ norm(. - mean_yhat, type = "2")) %>%
     mean()
+  ES <-
+    T_hat / norm(mean_yhat, type = "2")
+  ES
 }
 ###################
 
 #########################
 #### DATA GENERATION ####
+generate_uniform_covariate <- function(n = 150, bound = 10) {
+  runif(n, -bound, bound)
+}
 
+generate_normal_covariate <- function(n = 150, sd = 5) {
+  rnorm(n, sd = sd)
+}
+
+generate_data <- function(n = 150, k = 3, generation_fn = generate_uniform_covariate, formula = x1 + x2 + x3) {
+  formula <- rlang::enquo(formula)
+  covariates <-
+    purrr::rerun(k, purrr::partial(generation_fn, n = n)()) %>%
+    dplyr::bind_cols()
+  covariates %>%
+    dplyr::rename_all(dplyr::funs(stringr::`str_sub<-`(string = ., value = "x", start = 1, end = 1))) %>%
+    dplyr::mutate(y := !! formula)
+}
 #########################
 
 ######################
@@ -58,7 +78,3 @@ add_collinearity <- function(.data) {
   .data
 }
 ######################
-
-
-
-
