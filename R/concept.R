@@ -18,7 +18,22 @@ ES <- function(.data, V = 100, formula = y ~ ., perturb_fn = perturb) { ## pertu
 
 #########################
 #### DATA GENERATION ####
+add_collinearity <- function(.data, formula, random) {
+  formula <- rlang::enquo(formula)
+  n <- nrow(.data)
+  integer = sample(100, size = 1)
+  while ((paste('x_', integer, sep = '')) %in% names(.data)){
+    integer = sample(100, size = 1)
+  }
+  .data %>% mutate((!!paste('x_', integer, sep = '')) := (!!formula) + purrr::partial(random, n = n)())
+}
 
+add_multicoll <- function(.data, formula, random, k) {
+  formula <- rlang::enquo(formula)
+  add_coll <- purrr::partial(add_collinearity, formula = (!!formula), random = random)
+  multicoll_fxn <- purrr::rerun(k, add_coll) %>% purrr::reduce(purrr::compose)
+  multicoll_fxn(.data)
+}
 #########################
 
 ######################
@@ -50,13 +65,6 @@ estimate_perturbed_slope <- function(.data, coeff = c("perturbed", "(Intercept)"
     use_series(coefficients) %>% extract(coeff)
 }
 
-add_collinearity <- function(.data) {
-  #create more x columns that are just +c of each other
-  .data['x_1'] = .data$x+1
-  .data['x_2'] = .data$x+2
-  .data['x_3'] = .data$x+3
-  .data
-}
 ######################
 
 
