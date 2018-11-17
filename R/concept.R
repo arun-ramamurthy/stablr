@@ -39,6 +39,23 @@ generate_data <- function(n = 150, k = 3, generation_fn = generate_uniform_covar
     dplyr::rename_all(dplyr::funs(stringr::`str_sub<-`(string = ., value = "x", start = 1, end = 1))) %>%
     dplyr::mutate(y := !! formula)
 }
+
+add_collinearity <- function(.data, formula, random) {
+  formula <- rlang::enquo(formula)
+  n <- nrow(.data)
+  integer = sample(100, size = 1)
+  while ((paste('x_', integer, sep = '')) %in% names(.data)){
+    integer = sample(100, size = 1)
+  }
+  .data %>% mutate((!!paste('x_', integer, sep = '')) := (!!formula) + purrr::partial(random, n = n)())
+}
+
+add_multicoll <- function(.data, formula, random, k) {
+  formula <- rlang::enquo(formula)
+  add_coll <- purrr::partial(add_collinearity, formula = (!!formula), random = random)
+  multicoll_fxn <- purrr::rerun(k, add_coll) %>% purrr::reduce(purrr::compose)
+  multicoll_fxn(.data)
+}
 #########################
 
 ######################
@@ -70,6 +87,7 @@ estimate_perturbed_slope <- function(.data, coeff = c("perturbed", "(Intercept)"
     use_series(coefficients) %>% extract(coeff)
 }
 
+<<<<<<< HEAD
 add_collinearity <- function(.data) {
   #create more x columns that are just +c of each other
   .data['x_1'] = .data$x+1
@@ -78,3 +96,10 @@ add_collinearity <- function(.data) {
   .data
 }
 ######################
+=======
+######################
+
+
+
+
+>>>>>>> c101eeb11261efd832a1a7d0b082b3c4ea7d4e8c
