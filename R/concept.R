@@ -31,25 +31,37 @@ generate_normal_vector <- function(n = 150, sd = 5) {
 }
 
 #' @import magrittr
-generate_data <- function(n = 150, k = 3,
-                          covariate_generation_fn = generate_uniform_vector,
-                          y_formula, y_noise_fn = purrr::partial(generate_normal_vector, sd = 1)) {
-  y_formula <- rlang::enquo(y_formula)
+generate_covariates <- function(n = 150, k = 3,
+                                covariate_generation_fn = generate_uniform_vector) {
   covariates <-
     purrr::rerun(k, purrr::partial(covariate_generation_fn, n = n)()) %>%
     dplyr::bind_cols()
   covariates %>%
-    dplyr::rename_all(dplyr::funs(stringr::`str_sub<-`(string = ., value = "x_", start = 1, end = 1))) %>%
+    dplyr::rename_all(dplyr::funs(stringr::`str_sub<-`(string = ., value = "x_", start = 1, end = 1)))
+}
+
+augment_y <- function(.data, y_formula, y_noise_fn = purrr::partial(generate_normal_vector, sd = 1)) {
+  n <- nrow(.data)
+  y_formula <- rlang::enquo(y_formula)
+  .data %>%
     dplyr::mutate(y := (!! y_formula) + purrr::partial(y_noise_fn, n = n)())
+}
+
+generate_data <- function(n = 150, k = 3,
+                          covariate_generation_fn = generate_uniform_vector,
+                          y_formula, y_noise_fn = purrr::partial(generate_normal_vector, sd = 1)) {
+  y_formula <- rlang::enquo(y_formula)
+  generate_covariates(n, k, covariate_generation_fn) %>%
+    augment_y(!! y_formula, y_noise_fn)
 }
 
 augment_collinearity <- function(.data,
                                  new_col_formula, new_col_noise_fn = purrr::partial(generate_normal_vector, sd = 1)) {
   new_col_formula <- rlang::enquo(new_col_formula)
   n <- nrow(.data)
-  integer <- sample(100, size = 1)
+  integer <- 1
   while ((paste('x_', integer, sep = '')) %in% names(.data)){
-    integer <- sample(100, size = 1)
+    integer %<>% magrittr::add(1)
   }
   .data %>%
     dplyr::mutate((!! paste('x_', integer, sep = '')) :=

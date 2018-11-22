@@ -10,11 +10,12 @@ vignette: >
 ---
 
 ```{r setup, include = FALSE}
-library(stablr)
+library(stablr); library(glue); library(dplyr)
 knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>"
 )
+set.seed(108)
 ```
 
 # Overview of Stability
@@ -22,6 +23,39 @@ knitr::opts_chunk$set(
 What is stability, Biyonka?
 
 # Illustrative Example I: Low-dimensional Collinearity
+
+```{r}
+## Generate a dataframe of 2 uniform covariates and a response, y = x_1 + x_2 + N(0, 1)
+stable_data <- 
+  stablr::generate_data(n = 100, k = 2, 
+                        covariate_generation_fn = purrr::partial(stablr::generate_uniform_vector,
+                                                                 bound = 10),
+                        y_formula = x_1 + x_2,
+                        y_noise_fn = purrr::partial(stablr::generate_normal_vector,
+                                                    sd = 1))
+
+## Generate a similar dataframe, with the same x_1, but a collinear x_2 = 2*x_1 + 5 + N(0, 1) and similarly computed y to above
+unstable_data <- 
+  dplyr::select(stable_data, x_1)  %>%
+  stablr::augment_collinearity(new_col_formula = 2*x_1 + 5, 
+                               new_col_noise_fn = purrr::partial(stablr::generate_normal_vector,
+                                                                 sd = 1)) %>%
+  stablr::augment_y(y_formula = x_1 + x_2,
+                    y_noise_fn = purrr::partial(stablr::generate_normal_vector,
+                                                sd = 1))
+
+## Calculate Estimation Stability as presented in Yu 2013
+stable_ES <-
+  stable_data %>% stablr::ES.lm(y ~ ., V = 500, multiperturb_fn = multiperturb_norm, x_1, x_2) %>% round(5)
+unstable_ES <-
+  unstable_data %>% stablr::ES.lm(y ~ ., V = 500, multiperturb_fn = multiperturb_norm, x_1, x_2) %>% round(5)
+
+print(
+  glue::glue("For the same model formulation, the stable data shows an Estimation Stability of {stable_ES},\n
+             whereas the unstable data shows an ES of {unstable_ES}.\n
+             In this simulation, collinear data yields a reduction by {round((stable_ES - unstable_ES)/stable_ES, 4)*100} percent in Estimation Stability. ")
+)
+```
 
 # Illustrative Example II: High-dimensional Collinearity
 
