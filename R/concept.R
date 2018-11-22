@@ -1,5 +1,9 @@
+#' @import magrittr
+
 ###################
 #### STABILITY ####
+
+#' @export
 ES.lm <- function(.data, lm_formula, V = 100, multiperturb_fn = multiperturb_norm, ...) {
   perturb_cols <- rlang::ensyms(...)
   simulate_single_yhat <- function() {
@@ -22,15 +26,18 @@ ES.lm <- function(.data, lm_formula, V = 100, multiperturb_fn = multiperturb_nor
 
 #########################
 #### DATA GENERATION ####
+
+#' @export
 generate_uniform_vector <- function(n = 150, bound = 10) {
   runif(n, -bound, bound)
 }
 
+#' @export
 generate_normal_vector <- function(n = 150, sd = 5) {
   rnorm(n, sd = sd)
 }
 
-#' @import magrittr
+#' @export
 generate_covariates <- function(n = 150, k = 3,
                                 covariate_generation_fn = generate_uniform_vector) {
   covariates <-
@@ -40,6 +47,7 @@ generate_covariates <- function(n = 150, k = 3,
     dplyr::rename_all(dplyr::funs(stringr::`str_sub<-`(string = ., value = "x_", start = 1, end = 1)))
 }
 
+#' @export
 augment_y <- function(.data, y_formula, y_noise_fn = purrr::partial(generate_normal_vector, sd = 1)) {
   n <- nrow(.data)
   y_formula <- rlang::enquo(y_formula)
@@ -47,6 +55,7 @@ augment_y <- function(.data, y_formula, y_noise_fn = purrr::partial(generate_nor
     dplyr::mutate(y := (!! y_formula) + purrr::partial(y_noise_fn, n = n)())
 }
 
+#' @export
 generate_data <- function(n = 150, k = 3,
                           covariate_generation_fn = generate_uniform_vector,
                           y_formula, y_noise_fn = purrr::partial(generate_normal_vector, sd = 1)) {
@@ -55,6 +64,7 @@ generate_data <- function(n = 150, k = 3,
     augment_y(!! y_formula, y_noise_fn)
 }
 
+#' @export
 augment_collinearity <- function(.data,
                                  new_col_formula, new_col_noise_fn = purrr::partial(generate_normal_vector, sd = 1)) {
   new_col_formula <- rlang::enquo(new_col_formula)
@@ -68,6 +78,7 @@ augment_collinearity <- function(.data,
                     (!! new_col_formula) + purrr::partial(new_col_noise_fn, n = n)())
 }
 
+#' @export
 augment_multicollinearity <- function(.data, k = 3,
                                       new_col_formula, new_col_noise_fn = purrr::partial(generate_normal_vector, sd = 1)) {
   new_col_formula <- rlang::enquo(new_col_formula)
@@ -108,10 +119,12 @@ multiperturb <- function(.data, perturb_fn, ...) {
   multiperturb(.data)
 }
 
+#' @export
 multiperturb_norm <- function(.data, sd = 1, ...) {
   multiperturb(.data, purrr::partial(perturb_norm, sd = sd), ...)
 }
 
+#' @export
 multiperturb_unif <- function(.data, bound = 1, ...) {
   multiperturb(.data, purrr::partial(perturb_unif, bound = bound), ...)
 }
