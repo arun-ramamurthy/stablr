@@ -1,9 +1,10 @@
 ###################
 #### STABILITY ####
-ES.lm <- function(.data, lm_formula, V = 100, perturb_fn = perturb) {
+ES.lm <- function(.data, lm_formula, V = 100, multiperturb_fn = multiperturb_norm, ...) {
+  perturb_cols <- rlang::ensyms(...)
   simulate_single_yhat <- function() {
     .data %>%
-      perturb_fn() %>%
+      multiperturb_fn(... = !!! perturb_cols) %>%
       lm(formula = lm_formula) %>%
       predict()
   }
@@ -68,8 +69,8 @@ augment_multicollinearity <- function(.data, k = 3,
 
 ######################
 #### PERTURBATION ####
-perturb <- function(.data, variable = x, sd = 1) {
-  variable <- rlang::enquo(variable)
+perturb_norm <- function(.data, variable = x, sd = 1) {
+  variable <- rlang::ensym(variable)
   raw_vector <- .data %>% dplyr::pull(!! variable)
   additional_noise <- rnorm(n = length(raw_vector), sd = sd)
   .data %>%
@@ -77,18 +78,29 @@ perturb <- function(.data, variable = x, sd = 1) {
 }
 
 perturb_unif <- function(.data, variable = x, bound = 1) {
-  variable <- rlang::enquo(variable)
+  variable <- rlang::ensym(variable)
   raw_vector = .data %>% dplyr::pull(!! variable)
   additional_noise <- runif(n = length(raw_vector), min = -bound, max = bound)
   .data %>%
     dplyr::mutate((!! variable) := (!! variable) + additional_noise)
 }
 
-estimate_perturbed_slope <- function(.data, coeff = c("perturbed", "(Intercept)"), perturb_fn = perturb) {
-  coeff <- match.arg(coeff)
-  .data %>%
-    perturb_fn() %>%
-    lm(formula = y ~ perturbed) %>%
-    magrittr::use_series(coefficients) %>% magrittr::extract(coeff)
+multiperturb <- function(.data, perturb_fn, ...) {
+  perturb_cols <- rlang::ensyms(...)
+  perturbs <-
+    perturb_cols %>%
+    purrr::map(~ purrr::partial(perturb_fn, variable = !! .))
+  multiperturb <-
+    perturbs %>%
+    purrr::reduce(purrr::compose)
+  multiperturb(.data)
+}
+
+multiperturb_norm <- function(.data, sd = 1, ...) {
+  multiperturb(.data, purrr::partial(perturb_norm, sd = sd), ...)
+}
+
+multiperturb_unif <- function(.data, bound = 1, ...) {
+  multiperturb(.data, purrr::partial(perturb_unif, bound = bound), ...)
 }
 ######################
