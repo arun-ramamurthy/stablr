@@ -13,7 +13,8 @@ vignette: >
 library(stablr); library(glue); library(dplyr);library(purrr);library(devtools);library(datamicroarray)
 knitr::opts_chunk$set(
   collapse = TRUE,
-  comment = ""
+  comment = "",
+  eval = F
 )
 set.seed(108)
 ```
@@ -21,6 +22,33 @@ set.seed(108)
 # Overview of Stability
 
 What is stability, Biyonka?
+
+## Estimation Stability 
+
+In [Stability (Yu 2013)](https://arxiv.org/pdf/1310.0150.pdf) and [Estimation Stability with Cross Validation (Yu 2015)](https://arxiv.org/pdf/1303.3128.pdf), the following formula is given for the *estimation stability metric*:
+
+$$\textit{ES}
+\mathrel{\mathop:}=
+\frac{\widehat{\mathrm{Var}}(\hat{y})}{\left\Vert\bar{\hat{y}}\right\Vert^2_2}$$
+
+Noting that the *prediction variance* $\widehat{T}$ can be estimated with,
+$$
+\widehat{T}
+\mathrel{\mathop:}=
+\widehat{\mathrm{Var}}(\hat{y})
+= \frac{1}{V} \sum_{i=1}^V 
+\left\Vert 
+\hat{y}_i - \bar{\hat{y}}
+\right\Vert^2_2$$
+and the *average prediction* $\hat{m}$ with,
+$$\hat{m} 
+\mathrel{\mathop:}=
+\bar{\hat{y}} = \frac{1}{V}\sum_{i=1}^V \hat{y}_i $$
+
+We derive the following formula for estimation stability, with $\hat{T}$ and $\hat{m}$ defined above:
+$$\textit{ES} =  \frac{\widehat{T}}{\hat{m}}$$
+
+The *ES metric* is a measure of reliability in the model's predictions. For now, we explore the influence of various known statistical phenomenon on the ES metric for both synthetic and real dataset examples.
 
 # Illustrative Example I: Low-dimensional Collinearity
 
@@ -60,12 +88,70 @@ In this simulation, collinear data yield a reduction of {round((stable_ES - unst
 ```
 
 
-# Illustrative Example II: Low Dimensional Collinearity on Real Dataset
+# Illustrative Example II: The Effect of High-Dimensionality on Stability
 
-Example of use:
+```{r ex2}
+simple <- 
+  generate_data(n = 100, k = 1, 
+                covariate_generation_fn = partial(generate_uniform_vector, bound = 10),
+                y_formula = x_1,
+                y_noise_fn = partial(generate_normal_vector, sd = 1))
 
-```{r}
+small <- 
+  generate_data(n = 100, k = 2, 
+                covariate_generation_fn = partial(generate_uniform_vector, bound = 10),
+                y_formula = x_1 + x_2,
+                y_noise_fn = partial(generate_normal_vector, sd = 1))
 
+medium <- 
+  generate_data(n = 100, k = 6, 
+                covariate_generation_fn = partial(generate_uniform_vector, bound = 10),
+                y_formula = x_1 + x_2 + x_3 + x_4 + x_5 + x_6,
+                y_noise_fn = partial(generate_normal_vector, sd = 1))
+
+big <- 
+  generate_data(n = 100, k = 10, 
+                covariate_generation_fn = partial(generate_uniform_vector, bound = 10),
+                y_formula = x_1 + x_2 + x_3 + x_4 + x_5 + x_6 + x_7 + x_8 + x_9 + x_10,
+                y_noise_fn = partial(generate_normal_vector, sd = 1))
+
+simple_ES <-
+  simple %>% 
+  ES.lm(y ~ x_1, V = 500, multiperturb_fn = multiperturb_norm, x_1) %>% 
+  round(5)
+
+small_ES <-
+  small %>% 
+  ES.lm(y ~ x_1 + x_2, V = 500, multiperturb_fn = multiperturb_norm, x_1, x_2) %>% 
+  round(5)
+
+medium_ES <-
+  medium %>% 
+  ES.lm(y ~ ., V = 500, multiperturb_fn = multiperturb_norm, x_1, x_2, x_3, x_4, x_5, x_6) %>% 
+  round(5)
+
+big_ES <-
+  big %>% 
+  ES.lm(y ~ ., V = 500, multiperturb_fn = multiperturb_norm, x_1, x_2, x_3, x_4, x_5, x_6, x_7, x_8, x_9, x_10) %>% 
+  round(5)
+```
+
+```{r ex2_out, echo=F}
+print(
+  glue(
+    " ES for various # of covariates:\n
+    1: {simple_ES}
+    2: {small_ES}
+    6: {medium_ES}
+    10: {big_ES}" 
+  )
+)
+
+```
+
+# Illustrative Example III: Low Dimensional Collinearity on Real Dataset
+
+```{r ex3}
 ## Generate a similar dataframe, but adds one new collinear column of 2*Petal.Length + Petal.Width + 5 + N(0, 1)
 unstable_iris <- iris %>%
   augment_multicollinearity(k=1, new_col_formula = 2*Petal.Length +Petal.Width+ 5, 
@@ -96,16 +182,16 @@ control_iris_ES <- i %>% ES.lm(lm_formula = Sepal.Length ~ .,
                         round(5)
 ```
 
-```{r ex1_out, echo=F}
+```{r ex3_out, echo=F}
 print(glue("For the same model formulation, the stable dataset shows an Estimation Stability of {stable_iris_ES},\n
 whereas the unstable dataset shows an ES of {unstable_iris_ES}. The control ES was {control_iris_ES}.\n
 In this simulation, collinear data yield a reduction of {round((stable_iris_ES - unstable_iris_ES)/stable_iris_ES, 4)*100} percent in Estimation Stability. "))
 ```
 
-# Illustrative Example III: High-dimensional Collinearity
+# Illustrative Example IV: High-dimensional Collinearity
 
 Example of use:
-```{r}
+```{r ex4}
 #import sorlie, a small-sample, high-dimensional microarray data set
 data('sorlie', package = 'datamicroarray')
 s = data.frame(sorlie)
@@ -128,7 +214,7 @@ unstable_hd_ES <- unstable_hd %>% ES.lm(lm_formula = y ~ .,
                        x.1, x.2) 
 ```
 
-```{r ex1_out, echo=F}
+```{r ex4_out, echo=F}
 print(glue("For the same model formulation, the stable dataset shows an Estimation Stability of {stable_hd_ES},\n
 whereas the unstable dataset shows an ES of {unstable_hd_ES}.\n
 In this simulation, collinear data yield a reduction of {round((stable_hd_ES - unstable_hd_ES)/stable_hd_ES, 4)*100} percent in Estimation Stability. \n
