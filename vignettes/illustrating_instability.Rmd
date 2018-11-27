@@ -10,17 +10,45 @@ vignette: >
 ---
 
 ```{r setup, include = FALSE}
-library(stablr); library(glue); library(dplyr);library(purrr);library(devtools);library(datamicroarray)
+library(stablr); library(glue); library(dplyr);library(purrr);library(devtools);library(datamicroarray);library(ggplot2)
 knitr::opts_chunk$set(
   collapse = TRUE,
   comment = ""
 )
-set.seed(108)
+theme_set(theme_minimal())
+set.seed(1001)
 ```
 
 # Overview of Stability
 
 What is stability, Biyonka?
+
+## Estimation Stability 
+
+In [Stability (Yu 2013)](https://arxiv.org/pdf/1310.0150.pdf) and [Estimation Stability with Cross Validation (Yu 2015)](https://arxiv.org/pdf/1303.3128.pdf), the following formula is given for the *estimation stability metric*:
+
+$$\textit{ES}
+\mathrel{\mathop:}=
+\frac{\widehat{\mathrm{Var}}(\hat{y})}{\left\Vert\bar{\hat{y}}\right\Vert^2_2}$$
+
+Noting that the *prediction variance* $\widehat{T}$ can be estimated with,
+$$
+\widehat{T}
+\mathrel{\mathop:}=
+\widehat{\mathrm{Var}}(\hat{y})
+= \frac{1}{V} \sum_{i=1}^V 
+\left\Vert 
+\hat{y}_i - \bar{\hat{y}}
+\right\Vert^2_2$$
+and the *average prediction* $\hat{m}$ with,
+$$\hat{m} 
+\mathrel{\mathop:}=
+\bar{\hat{y}} = \frac{1}{V}\sum_{i=1}^V \hat{y}_i $$
+
+We derive the following formula for estimation stability, with $\hat{T}$ and $\hat{m}$ defined above:
+$$\textit{ES} =  \frac{\widehat{T}}{\hat{m}}$$
+
+The *ES metric* is a measure of reliability in the model's predictions. For now, we explore the influence of various known statistical phenomenon on the ES metric for both synthetic and real dataset examples.
 
 # Illustrative Example I: Low-dimensional Collinearity
 
@@ -54,111 +82,227 @@ unstable_ES <-
   round(5)
 ```
 ```{r ex1_out, echo=F}
-print(glue("For the same model formulation, the stable dataset shows an Estimation Stability of {stable_ES},\n
-whereas the unstable dataset shows an ES of {unstable_ES}.\n
-In this simulation, collinear data yield a reduction of {round((stable_ES - unstable_ES)/stable_ES, 4)*100} percent in Estimation Stability. "))
+print(glue("For the same model formulation, the stable dataset shows an Estimation Stability of {stable_ES},
+whereas the unstable dataset shows an ES of {unstable_ES}.
+In this simulation, collinear data yield a reduction of {round((stable_ES - unstable_ES)/stable_ES, 4)*100} percent in Estimation Stability."))
+```
+# Illustrative Example II: The Effect of Large N on Stability
+```{r ex2}
+N_5 <-
+  generate_data(n = 5, k = 4, 
+                covariate_generation_fn = partial(generate_uniform_vector, bound = 10),
+                y_formula = x_1 + x_2 + x_3 + x_4,
+                y_noise_fn = partial(generate_normal_vector, sd = 1))
+
+N_20 <-
+  generate_data(n = 20, k = 4, 
+                covariate_generation_fn = partial(generate_uniform_vector, bound = 10),
+                y_formula = x_1 + x_2 + x_3 + x_4,
+                y_noise_fn = partial(generate_normal_vector, sd = 1))
+
+N_50 <-
+  generate_data(n = 50, k = 4, 
+                covariate_generation_fn = partial(generate_uniform_vector, bound = 10),
+                y_formula = x_1 + x_2 + x_3 + x_4,
+                y_noise_fn = partial(generate_normal_vector, sd = 1))
+
+N_100 <-
+  generate_data(n = 100, k = 4, 
+                covariate_generation_fn = partial(generate_uniform_vector, bound = 10),
+                y_formula = x_1 + x_2 + x_3 + x_4,
+                y_noise_fn = partial(generate_normal_vector, sd = 1))
+
+N_500 <-
+  generate_data(n = 500, k = 4, 
+                covariate_generation_fn = partial(generate_uniform_vector, bound = 10),
+                y_formula = x_1 + x_2 + x_3 + x_4,
+                y_noise_fn = partial(generate_normal_vector, sd = 1))
+
+N_10000 <-
+  generate_data(n = 10000, k = 4, 
+                covariate_generation_fn = partial(generate_uniform_vector, bound = 10),
+                y_formula = x_1 + x_2 + x_3 + x_4,
+                y_noise_fn = partial(generate_normal_vector, sd = 1))
+
+N_million <-
+  generate_data(n = 1e6, k = 4, 
+                covariate_generation_fn = partial(generate_uniform_vector, bound = 10),
+                y_formula = x_1 + x_2 + x_3 + x_4,
+                y_noise_fn = partial(generate_normal_vector, sd = 1))
+
+ESes <-
+  list(N_5, N_20, N_50, N_100, N_500, N_10000, N_million) %>%
+  map_dbl(~ ES.lm(., lm_formula = y ~ ., V = 100, multiperturb_fn = multiperturb_norm, x_1, x_2, x_3, x_4)) %>%
+  round(5)
+```
+```{r ex2_out, echo=F, fig.align="center", fig.width=9}
+ex2_df <- 
+  data_frame(N = c(5, 20, 50, 100, 500, 1e4, 1e6),
+             ES = ESes)
+
+ex2_df %>% 
+  ggplot(aes(N, ES)) +
+  geom_line(size = 2) + 
+  scale_x_log10() +
+  labs(title = "The Effect of Large N on Estimation Stability", subtitle = "x-axis on a log-scale for graphical purposes")
+knitr::kable(ex2_df %>% mutate(N = as.character(N)), digits = 4)
 ```
 
 
-# Illustrative Example II: Low Dimensional Collinearity on Real Dataset
+# Illustrative Example III: The Effect of High-Dimensionality on Stability
+```{r ex3}
+simple <- 
+  generate_data(n = 20, k = 1, 
+                covariate_generation_fn = partial(generate_uniform_vector, bound = 10),
+                y_formula = x_1,
+                y_noise_fn = partial(generate_normal_vector, sd = 1))
 
-Example of use:
+duo <- 
+  generate_data(n = 20, k = 2, 
+                covariate_generation_fn = partial(generate_uniform_vector, bound = 10),
+                y_formula = x_1 + x_2,
+                y_noise_fn = partial(generate_normal_vector, sd = 1))
 
-```{r}
+small <- 
+  generate_data(n = 20, k = 4, 
+                covariate_generation_fn = partial(generate_uniform_vector, bound = 10),
+                y_formula = x_1 + x_2 + x_3 + x_4,
+                y_noise_fn = partial(generate_normal_vector, sd = 1))
 
+medium <- 
+  generate_data(n = 20, k = 6, 
+                covariate_generation_fn = partial(generate_uniform_vector, bound = 10),
+                y_formula = x_1 + x_2 + x_3 + x_4 + x_5 + x_6,
+                y_noise_fn = partial(generate_normal_vector, sd = 1))
+
+big <- 
+  generate_data(n = 20, k = 10, 
+                covariate_generation_fn = partial(generate_uniform_vector, bound = 10),
+                y_formula = x_1 + x_2 + x_3 + x_4 + x_5 + x_6 + x_7 + x_8 + x_9 + x_10,
+                y_noise_fn = partial(generate_normal_vector, sd = 1))
+
+simple_ES <-
+  simple %>% 
+  ES.lm(y ~ ., V = 500, multiperturb_fn = multiperturb_norm, x_1) %>% 
+  round(5)
+
+duo_ES <-
+  small %>% 
+  ES.lm(y ~ ., V = 500, multiperturb_fn = multiperturb_norm, x_1, x_2) %>% 
+  round(5)
+
+small_ES <-
+  small %>% 
+  ES.lm(y ~ ., V = 500, multiperturb_fn = multiperturb_norm, x_1, x_2, x_3, x_4) %>% 
+  round(5)
+
+medium_ES <-
+  medium %>% 
+  ES.lm(y ~ ., V = 500, multiperturb_fn = multiperturb_norm, x_1, x_2, x_3, x_4, x_5, x_6) %>% 
+  round(5)
+
+big_ES <-
+  big %>% 
+  ES.lm(y ~ ., V = 500, multiperturb_fn = multiperturb_norm, x_1, x_2, x_3, x_4, x_5, x_6, x_7, x_8, x_9, x_10) %>% 
+  round(5)
+```
+
+```{r ex3_out, echo=F, fig.align="center", fig.width=9}
+ex3_df <-
+  data_frame(`Number of Covariates` = c(1, 2, 4, 6, 10),
+             `ES` = c(simple_ES, duo_ES, small_ES, medium_ES, big_ES))
+ex3_df %>% 
+  ggplot(aes(`Number of Covariates`, ES)) +
+  geom_line(size = 2) + 
+  scale_x_log10() +
+  labs(title = "The Effect of High-Dimensionality on Estimation Stability")
+knitr::kable(ex3_df)
+```
+
+# Illustrative Example IV: Low Dimensional Collinearity on Real Dataset
+```{r ex4}
 ## Generate a similar dataframe, but adds one new collinear column of 2*Petal.Length + Petal.Width + 5 + N(0, 1)
-unstable_iris <- iris %>%
-  augment_multicollinearity(k=1, new_col_formula = 2*Petal.Length +Petal.Width+ 5, 
-                       new_col_noise_fn = partial(generate_normal_vector, sd = 1))
+unstable_iris <- 
+  iris %>%
+  augment_multicollinearity(k = 1, 
+                            new_col_formula = 2*Petal.Length + Petal.Width + 5, 
+                            new_col_noise_fn = partial(generate_normal_vector, sd = 1))
 
 
 ## Calculate Estimation Stability as presented in Yu 2013, just adding perturbations to petal length and width
-stable_iris_ES <- iris %>% ES.lm(lm_formula = Sepal.Length ~ .,
-                       V = 100, 
-                       multiperturb_fn = multiperturb_norm,
-                       Petal.Length, Petal.Width) %>% 
-                        round(5)
+stable_iris_ES <- 
+  iris %>% 
+  ES.lm(lm_formula = Sepal.Length ~ .,
+        V = 100, 
+        multiperturb_fn = multiperturb_norm,
+        Petal.Length, Petal.Width) %>% 
+  round(5)
 
-unstable_iris_ES <- unstable_iris %>% ES.lm(lm_formula = Sepal.Length ~ .,
-                       V = 100, 
-                       multiperturb_fn = multiperturb_norm,
-                       Petal.Length, Petal.Width) %>% 
-                        round(5)
+unstable_iris_ES <- 
+  unstable_iris %>% 
+  ES.lm(lm_formula = Sepal.Length ~ .,
+        V = 100, 
+        multiperturb_fn = multiperturb_norm,
+        Petal.Length, Petal.Width) %>% 
+  round(5)
 
 #Adding any column may decrease the ES of the model. To illustrate the effect collinearity has, we also add a column of random noise values to iris and calculate the stability to act as a "control" measure of Stability
-i = iris
-i["random"] = rnorm(length(i$Sepal.Length), 0, 1)
+N <- nrow(iris)
+control_iris <-
+  iris %>%
+  mutate(random = generate_normal_vector(n = N, sd = 1))
 
-control_iris_ES <- i %>% ES.lm(lm_formula = Sepal.Length ~ .,
-                       V = 100, 
-                       multiperturb_fn = multiperturb_norm,
-                       Petal.Length, Petal.Width) %>% 
-                        round(5)
+control_iris_ES <- 
+  control_iris %>% 
+  ES.lm(lm_formula = Sepal.Length ~ .,
+        V = 100, 
+        multiperturb_fn = multiperturb_norm,
+        Petal.Length, Petal.Width) %>% 
+  round(5)
 ```
 
-```{r ex1_out, echo=F}
+```{r ex4_out, echo=F}
 print(glue("For the same model formulation, the stable dataset shows an Estimation Stability of {stable_iris_ES},\n
 whereas the unstable dataset shows an ES of {unstable_iris_ES}. The control ES was {control_iris_ES}.\n
 In this simulation, collinear data yield a reduction of {round((stable_iris_ES - unstable_iris_ES)/stable_iris_ES, 4)*100} percent in Estimation Stability. "))
 ```
 
-# Illustrative Example III: High-dimensional Collinearity
+# Illustrative Example V: High-dimensional Collinearity
 
 Example of use:
-```{r}
+```{r ex5}
 #import sorlie, a small-sample, high-dimensional microarray data set
 data('sorlie', package = 'datamicroarray')
-s = data.frame(sorlie)
-s$y = as.numeric(s$y)
+hd <-
+  data.frame(sorlie) %>%
+  mutate(y = as.numeric(y))
 
 ## Generate a similar dataframe, but adds three new collinear columns of 2*x.1 + x.2 + 5 + N(0, 1)
-unstable_hd <- s %>%
-  augment_multicollinearity(k=3, new_col_formula = 2*x.1 +x.2 + 5, 
-                       new_col_noise_fn = partial(generate_normal_vector, sd = 1))
+unstable_hd <- 
+  hd %>%
+  augment_multicollinearity(k = 3, 
+                            new_col_formula = 2*x.1 +x.2 + 5, 
+                            new_col_noise_fn = partial(generate_normal_vector, sd = 1))
 
 ## Calculate Estimation Stability as presented in Yu 2013, just adding perturbations to x.1 and x.2
-stable_hd_ES <- s %>% ES.lm(lm_formula = y ~ .,
-                       V = 100, 
-                       multiperturb_fn = multiperturb_norm,
-                       x.1, x.2) 
+stable_hd_ES <- 
+  hd %>% 
+  ES.lm(lm_formula = y ~ .,
+        V = 100, 
+        multiperturb_fn = multiperturb_norm,
+        x.1, x.2) 
 
-unstable_hd_ES <- unstable_hd %>% ES.lm(lm_formula = y ~ .,
-                       V = 100, 
-                       multiperturb_fn = multiperturb_norm,
-                       x.1, x.2) 
+unstable_hd_ES <-
+  unstable_hd %>% 
+  ES.lm(lm_formula = y ~ .,
+        V = 100, 
+        multiperturb_fn = multiperturb_norm,
+        x.1, x.2) 
 ```
 
-```{r ex1_out, echo=F}
+```{r ex5_out, echo=F}
 print(glue("For the same model formulation, the stable dataset shows an Estimation Stability of {stable_hd_ES},\n
 whereas the unstable dataset shows an ES of {unstable_hd_ES}.\n
-In this simulation, collinear data yield a reduction of {round((stable_hd_ES - unstable_hd_ES)/stable_hd_ES, 4)*100} percent in Estimation Stability. \n
+In this simulation, collinear data yield a reduction of {round((stable_hd_ES - unstable_hd_ES)/stable_hd_ES, 4)*100} percent in Estimation Stability.\n
 However, it is clear from this example that the OLS model on high-dimensional data is overall very unstable compared to OLS on lower-dimensional data. Even when perturbing only two features out of 456, the Estimation Stability is very low even before collinearity is added."))
-```
-
-
-# Erase Me Later
-
-## Figures
-
-The figure sizes have been customised so that you can easily put two images side-by-side. 
-
-```{r, fig.show='hold'}
-plot(1:10)
-plot(10:1)
-```
-
-You can enable figure captions by `fig_caption: yes` in YAML:
-
-    output:
-      rmarkdown::html_vignette:
-        fig_caption: yes
-
-Then you can use the chunk option `fig.cap = "Your figure caption."` in **knitr**.
-
-## More Examples
-
-You can write math expressions, e.g. $Y = X\beta + \epsilon$, footnotes^[A footnote here.], and tables, e.g. using `knitr::kable()`.
-
-```{r, echo=FALSE, results='asis'}
-knitr::kable(head(mtcars, 10))
 ```
