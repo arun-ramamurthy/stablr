@@ -46,7 +46,7 @@ $$\hat{m}
 \bar{\hat{y}} = \frac{1}{V}\sum_{i=1}^V \hat{y}_i $$
 
 We derive the following formula for estimation stability, with $\hat{T}$ and $\hat{m}$ defined above:
-$$\textit{ES} =  \frac{\widehat{T}}{\hat{m}}$$
+$$\textit{ES} =  \frac{\widehat{T}}{\left\Vert\hat{m}\right\Vert^2_2}$$
 
 The *ES metric* is a measure of reliability in the model's predictions. For now, we explore the influence of various known statistical phenomenon on the ES metric for both synthetic and real dataset examples.
 
@@ -58,27 +58,34 @@ The *ES metric* is a measure of reliability in the model's predictions. For now,
 stable_data <- 
   generate_data(n = 100, k = 2, 
                 covariate_generation_fn = partial(generate_uniform_vector, bound = 10),
-                y_formula = x_1 + x_2,
+                y_formula = x_1,
                 y_noise_fn = partial(generate_normal_vector, sd = 1))
 
 ## Generate a similar dataframe, with the same x_1, 
 ### but a collinear x_2 = 2*x_1 + 5 + N(0, 1) and 
 ### and similarly computed y to above
 unstable_data <- 
-  select(stable_data, x_1)  %>%
+  stable_data %>% 
+  select(y, x_1)  %>%
   augment_collinearity(new_col_formula = 2*x_1 + 5, 
-                       new_col_noise_fn = partial(generate_normal_vector, sd = 1)) %>%
-  augment_y(y_formula = x_1 + x_2,
-            y_noise_fn = partial(generate_normal_vector, sd = 1))
+                       new_col_noise_fn = partial(generate_normal_vector, sd = 0.05))
+
+stable_data %>%
+  lm(formula = y ~ x_1 + x_2) %>% 
+  summary()
+
+unstable_data %>%
+  lm(formula = y ~ x_1 + x_2) %>% 
+  summary()
 
 ## Calculate Estimation Stability as presented in Yu 2013
 stable_ES <-
   stable_data %>% 
-  ES.lm(y ~ ., V = 500, multiperturb_fn = multiperturb_norm, x_1, x_2) %>% 
+  ES.lm(y ~ x_1 + x_2, V = 500, multiperturb_fn = partial(multiperturb_unif, bound = 1), x_1, x_2) %>% 
   round(5)
 unstable_ES <-
   unstable_data %>% 
-  ES.lm(y ~ ., V = 500, multiperturb_fn = multiperturb_norm, x_1, x_2) %>% 
+  ES.lm(y ~ x_1 + x_2, V = 500, multiperturb_fn = partial(multiperturb_unif, bound = 1), x_1, x_2) %>% 
   round(5)
 ```
 ```{r ex1_out, echo=F}
