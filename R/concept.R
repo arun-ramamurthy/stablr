@@ -17,9 +17,9 @@ ES.lm <- function(.data, lm_formula, V = 100, multiperturb_fn = multiperturb_nor
   mean_yhat <- purrr::invoke(cbind, V_yhats) %>% rowMeans()
   T_hat <-
     V_yhats %>%
-    purrr::map_dbl(~ norm(. - mean_yhat, type = "2")) %>%
+    purrr::map_dbl(~ norm(. - mean_yhat, type = "2")^2) %>%
     mean()
-  ES <- T_hat / norm(mean_yhat, type = "2")
+  ES <- T_hat / norm(mean_yhat, type = "2")^2
   ES
 }
 ###################
@@ -92,10 +92,20 @@ augment_multicollinearity <- function(.data, k = 3,
 
 ######################
 #### PERTURBATION ####
+perturb <- function(.data, variable, base_formula, noise_fn) {
+  variable <- rlang::ensym(variable)
+  base_formula <- rlang::enquo(base_formula)
+  if(is.null(base_formula))
+    base_formula <- variable
+  additional_noise <- noise_fn(n = nrow(.data))
+  .data %>%
+    dplyr::mutate((!! variable) := (!! base_formula) + additional_noise)
+
+}
+
 perturb_norm <- function(.data, variable = x, sd = 1) {
   variable <- rlang::ensym(variable)
   raw_vector <- .data %>% dplyr::pull(!! variable)
-  additional_noise <- rnorm(n = length(raw_vector), sd = sd)
   .data %>%
     dplyr::mutate((!! variable) := (!! variable) + additional_noise)
 }
@@ -128,4 +138,36 @@ multiperturb_norm <- function(.data, sd = 1, ...) {
 multiperturb_unif <- function(.data, bound = 1, ...) {
   multiperturb(.data, purrr::partial(perturb_unif, bound = bound), ...)
 }
+
+## (column, base_formula, noise) (.data, .vars, base_formula, noise_fn)
+generate_perturbation_matrix <- function(.data, .vars, base_formula, noise_fn = perturb_unif) {
+  selected_vars <- tidyselect::vars_select(names(.data), .vars)
+  base_formula <- enquo(base_formula)
+  data_frame(
+    variable = selected_vars,
+    base_formula = list(base_formula),
+    noise_fn = list(noise_fn))
+}
+
+multiperturb_df <- function(.data, perturbation_matrix) {
+  make_perturb_fn <- function(variable, base_formula, noise_fn) {
+    variable <- ensym(variable)
+    base_formula <- enquo(base_formula)
+    purrr::partial(perturb, variable = !! variable, base_formula = !! base_formula, noise_fn = noise_fn)
+  }
+  perturbs <-
+    perturbation_matrix %>%
+    purrr::pmap(make_perturb_fn)
+  multiperturb <-
+    perturbs %>%
+    purrr::reduce(purrr::compose)
+  multiperturb(.data)
+}
 ######################
+
+silence <- function(n){rep(0, n)}
+M <- iris %>% generate_perturbation_matrix(starts_with("Sepal"), Petal.Length/2, silence)
+iris %>%
+  perturb(Sepal.Length, Petal.Length/2, silence)
+iris %>%
+  multiperturb_df(M)
